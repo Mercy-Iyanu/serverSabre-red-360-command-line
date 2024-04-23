@@ -25,7 +25,7 @@ app.post('/api/sabre', async (req, res) => {
         <eb:Action>SessionCreateRQ</eb:Action>
         <eb:MessageData>
           <eb:MessageId>1000</eb:MessageId>
-          <eb:Timestamp>2024-04-19T016:58:00Z</eb:Timestamp>
+          <eb:Timestamp>2024-04-22T016:58:00Z</eb:Timestamp>
           <eb:TimeToLive>2024-04-26T16:58:00Z</eb:TimeToLive>
         </eb:MessageData>
       </eb:MessageHeader>
@@ -90,7 +90,7 @@ app.post('/api/sabre', async (req, res) => {
               <eb:Action>SabreCommandLLSRQ</eb:Action>
               <eb:MessageData>
                 <eb:MessageId>5590918583883411930</eb:MessageId>
-                <eb:Timestamp>2024-04-18T11:28:41</eb:Timestamp>
+                <eb:Timestamp>2024-04-22T11:28:41</eb:Timestamp>
                 <eb:TimeToLive>2024-04-26T11:28:41</eb:TimeToLive>
               </eb:MessageData>
             </eb:MessageHeader>
