@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
+const jwt = require('jsonwebtoken'); // Import JWT library
 const app = express();
 const PORT = process.env.PORT || 4000;
 const { DOMParser } = require('xmldom');
@@ -10,6 +11,9 @@ let securityToken = '';
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// Secret key for JWT signing
+const secretKey = 'your-secret-key';
 
 const getSecurityToken = async (req, res, next) => {
   try {
@@ -29,8 +33,8 @@ const getSecurityToken = async (req, res, next) => {
             <eb:Action>SessionCreateRQ</eb:Action>
             <eb:MessageData>
               <eb:MessageId>1000</eb:MessageId>
-              <eb:Timestamp>2024-04-19T016:58:00Z</eb:Timestamp>
-              <eb:TimeToLive>2024-04-26T16:58:00Z</eb:TimeToLive>
+              <eb:Timestamp>2024-04-24T016:58:00Z</eb:Timestamp>
+              <eb:TimeToLive>2024-05-26T16:58:00Z</eb:TimeToLive>
             </eb:MessageData>
           </eb:MessageHeader>
           <wsse:Security>
@@ -72,6 +76,12 @@ const getSecurityToken = async (req, res, next) => {
 
     securityToken = binarySecurityTokenNode.textContent;
 
+    // Generate JWT token containing the security token
+    const token = jwt.sign({ securityToken }, secretKey);
+
+    // Attach JWT token to response header
+    res.setHeader('Authorization', `Bearer ${token}`);
+
     next();
   } catch (error) {
     console.error('Error fetching security token:', error);
@@ -110,7 +120,7 @@ app.post('/api/sabre', async (req, res) => {
             <eb:Action>SabreCommandLLSRQ</eb:Action>
             <eb:MessageData>
               <eb:MessageId>5590918583883411930</eb:MessageId>
-              <eb:Timestamp>2024-04-18T11:28:41</eb:Timestamp>
+              <eb:Timestamp>2024-04-24T11:28:41</eb:Timestamp>
               <eb:TimeToLive>2024-04-26T11:28:41</eb:TimeToLive>
             </eb:MessageData>
           </eb:MessageHeader>
@@ -140,6 +150,7 @@ app.post('/api/sabre', async (req, res) => {
     };
 
     const response = await axios.request(config);
+    console.log(response.data)
     res.send(response.data);
   } catch (error) {
     console.error('Error sending Sabre command:', error);
