@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const jwt = require('jsonwebtoken'); // Import JWT library
+const jwt = require('jsonwebtoken')
 const app = express();
 const PORT = process.env.PORT || 4000;
 const { DOMParser } = require('xmldom');
@@ -11,9 +11,6 @@ let securityToken = '';
 
 app.use(cors());
 app.use(bodyParser.json());
-
-// Secret key for JWT signing
-const secretKey = 'your-secret-key';
 
 const getSecurityToken = async (req, res, next) => {
   try {
@@ -75,12 +72,7 @@ const getSecurityToken = async (req, res, next) => {
     const binarySecurityTokenNode = securityNode.getElementsByTagName('wsse:BinarySecurityToken')[0];
 
     securityToken = binarySecurityTokenNode.textContent;
-
-    // Generate JWT token containing the security token
-    const token = jwt.sign({ securityToken }, secretKey);
-
-    // Attach JWT token to response header
-    res.setHeader('Authorization', `Bearer ${token}`);
+    console.log(binarySecurityTokenNode);
 
     next();
   } catch (error) {
@@ -101,6 +93,7 @@ const constructRequestWithToken = (xmlData) => {
     </SOAP-ENV:Header>
   `;
 };
+
 
 app.post('/api/sabre', async (req, res) => {
   const requestData = `
