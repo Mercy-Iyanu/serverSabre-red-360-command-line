@@ -2,20 +2,22 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const axios = require('axios');
-const jwt = require('jsonwebtoken')
 const app = express();
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 const { DOMParser } = require('xmldom');
-
-let securityToken = ''; 
 
 app.use(cors());
 app.use(bodyParser.json());
 
-const getSecurityToken = async (req, res, next) => {
-  try {
-    const xmlData = `
-      <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/1999/XMLSchema" xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext">
+let cachedToken = null;
+
+// Route handler for retrieving the security token
+app.get('/api/sabre/token', async (req, res) => {
+  if (cachedToken) {
+    res.status(200).json({ token: cachedToken });
+  } else {
+    try {
+      const xmlData = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/1999/XMLSchema">
         <SOAP-ENV:Header>
           <eb:MessageHeader SOAP-ENV:mustUnderstand="1" eb:version="1.0">
             <eb:From>
@@ -30,11 +32,11 @@ const getSecurityToken = async (req, res, next) => {
             <eb:Action>SessionCreateRQ</eb:Action>
             <eb:MessageData>
               <eb:MessageId>1000</eb:MessageId>
-              <eb:Timestamp>2024-04-24T016:58:00Z</eb:Timestamp>
-              <eb:TimeToLive>2024-05-26T16:58:00Z</eb:TimeToLive>
+              <eb:Timestamp>2024-04-29T015:58:00Z</eb:Timestamp>
+              <eb:TimeToLive>2024-04-29T15:58:00Z</eb:TimeToLive>
             </eb:MessageData>
           </eb:MessageHeader>
-          <wsse:Security>
+          <wsse:Security xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext">
             <wsse:UsernameToken>
               <wsse:Username>937184</wsse:Username>
               <wsse:Password>WS20WS24</wsse:Password>
@@ -52,85 +54,78 @@ const getSecurityToken = async (req, res, next) => {
         </SOAP-ENV:Body>
       </SOAP-ENV:Envelope>`;
 
-    const config = {
-      method: 'post',
-      maxBodyLength: Infinity,
-      url: 'https://webservices.cert.platform.sabre.com/',
-      headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-      },
-      data: xmlData,
-    };
+      const config = {
+        method: 'post',
+        maxBodyLength: Infinity,
+        url: 'https://webservices.cert.platform.sabre.com/',
+        headers: {
+          'Content-Type': 'text/xml; charset=utf-8',
+        },
+        data: xmlData,
+      };
 
-    const response = await axios.request(config);
-    const xmlResponse = response.data;
+      const response = await axios.request(config);
+      const xmlResponse = response.data;
 
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlResponse, 'text/xml');
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlResponse, 'text/xml');
 
-    const securityNode = xmlDoc.getElementsByTagName('wsse:Security')[0];
-    const binarySecurityTokenNode = securityNode.getElementsByTagName('wsse:BinarySecurityToken')[0];
+      const securityNode = xmlDoc.getElementsByTagName('wsse:Security')[0];
+      const binarySecurityTokenNode = securityNode.getElementsByTagName('wsse:BinarySecurityToken')[0];
 
-    securityToken = binarySecurityTokenNode.textContent;
-    console.log(binarySecurityTokenNode);
+      // console.log(binarySecurityTokenNode);
 
-    next();
-  } catch (error) {
-    console.error('Error fetching security token:', error);
-    res.status(500).json({ error: 'Failed to fetch security token' });
+      cachedToken = binarySecurityTokenNode.textContent;
+
+      res.status(200).json({ token: cachedToken });
+    } catch (error) {
+      console.error('Error fetching security token:', error);
+      res.status(500).send('Internal Server Error');
+    }
   }
-};
+});
 
-app.use(getSecurityToken);
-
-const constructRequestWithToken = (xmlData) => {
-  return `
-    ${xmlData}
-    <SOAP-ENV:Header>
-      <wsse:Security xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext" xmlns:wsu="http://schemas.xmlsoap.org/ws/2002/12/utility">
-        <wsse:BinarySecurityToken valueType="String" EncodingType="wsse:Base64Binary">${securityToken}</wsse:BinarySecurityToken>
-      </wsse:Security>
-    </SOAP-ENV:Header>
-  `;
-};
-
-
+// Route handler for handling main functionality
 app.post('/api/sabre', async (req, res) => {
-  const requestData = `
-    <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/1999/XMLSchema" xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext">
-      ${constructRequestWithToken(`
-        <SOAP-ENV:Header>
-          <eb:MessageHeader SOAP-ENV:mustUnderstand="1" eb:version="1.0">
-            <eb:ConversationId>LRQ</eb:ConversationId>
-            <eb:From>
-              <eb:PartyId type="urn:x12.org:IO5:01">99999</eb:PartyId>
-            </eb:From>
-            <eb:To>
-              <eb:PartyId type="urn:x12.org:IO5:01">123123</eb:PartyId>
-            </eb:To>
-            <eb:CPAId>WD4H</eb:CPAId>
-            <eb:Service eb:type="OTA">SabreCommandLLSRQ</eb:Service>
-            <eb:Action>SabreCommandLLSRQ</eb:Action>
-            <eb:MessageData>
-              <eb:MessageId>5590918583883411930</eb:MessageId>
-              <eb:Timestamp>2024-04-24T11:28:41</eb:Timestamp>
-              <eb:TimeToLive>2024-04-26T11:28:41</eb:TimeToLive>
-            </eb:MessageData>
-          </eb:MessageHeader>
-        </SOAP-ENV:Header>
-        <SOAP-ENV:Body>
-          <SabreCommandLLSRQ EchoToken="String" TimeStamp="2001-12-17T09:30:47-05:00" Target="Production" Version="2003A.TsabreXML1.5.1" SequenceNmbr="1" PrimaryLangID="en-us" AltLangID="en-us" xmlns="http://webservices.sabre.com/sabreXML/2003/07" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-            <Request Output="SCREEN" CDATA="true">
-              <HostCommand>${req.body.inputText}</HostCommand>
-            </Request>
-          </SabreCommandLLSRQ>
-        </SOAP-ENV:Body>
-      `)}
-    </SOAP-ENV:Envelope>
-  `;
-
   try {
-    const config = {
+    // Retrieve the security token
+    const tokenResponse = await axios.get('http://localhost:3000/api/sabre/token');
+    const binarySecurityToken = tokenResponse.data.token;
+
+    const inputText = req.body.inputText;
+    const requestData = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:eb="http://www.ebxml.org/namespaces/messageHeader" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsd="http://www.w3.org/1999/XMLSchema">
+      <SOAP-ENV:Header>
+        <eb:MessageHeader SOAP-ENV:mustUnderstand="1" eb:version="1.0">
+          <eb:ConversationId>LRQ</eb:ConversationId>
+          <eb:From>
+            <eb:PartyId type="urn:x12.org:IO5:01">99999</eb:PartyId>
+          </eb:From>
+          <eb:To>
+            <eb:PartyId type="urn:x12.org:IO5:01">123123</eb:PartyId>
+          </eb:To>
+          <eb:CPAId>WD4H</eb:CPAId>
+          <eb:Service eb:type="OTA">SabreCommandLLSRQ</eb:Service>
+          <eb:Action>SabreCommandLLSRQ</eb:Action>
+          <eb:MessageData>
+            <eb:MessageId>5590918583883411930</eb:MessageId>
+            <eb:Timestamp>2024-04-29T15:28:41</eb:Timestamp>
+            <eb:TimeToLive>2024-04-29T15:28:41</eb:TimeToLive>
+          </eb:MessageData>
+        </eb:MessageHeader>
+        <wsse:Security xmlns:wsse="http://schemas.xmlsoap.org/ws/2002/12/secext" xmlns:wsu="http://schemas.xmlsoap.org/ws/2002/12/utility">
+          <wsse:BinarySecurityToken valueType="String" EncodingType="wsse:Base64Binary">${binarySecurityToken}</wsse:BinarySecurityToken>
+        </wsse:Security>
+      </SOAP-ENV:Header>
+      <SOAP-ENV:Body>
+        <SabreCommandLLSRQ EchoToken="String" TimeStamp="2001-12-17T09:30:47-05:00" Target="Production" Version="2003A.TsabreXML1.5.1" SequenceNmbr="1" PrimaryLangID="en-us" AltLangID="en-us" xmlns="http://webservices.sabre.com/sabreXML/2003/07" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+          <Request Output="SCREEN" CDATA="true">
+            <HostCommand>${inputText}</HostCommand>
+          </Request>
+        </SabreCommandLLSRQ>
+      </SOAP-ENV:Body>
+    </SOAP-ENV:Envelope>`;
+
+    const secondConfig = {
       method: 'post',
       maxBodyLength: Infinity,
       url: 'https://webservices.cert.platform.sabre.com/',
@@ -142,12 +137,11 @@ app.post('/api/sabre', async (req, res) => {
       data: requestData,
     };
 
-    const response = await axios.request(config);
-    console.log(response.data)
-    res.send(response.data);
+    const response = await axios.request(secondConfig);
+    res.send(JSON.stringify(response.data));
   } catch (error) {
-    console.error('Error sending Sabre command:', error);
-    res.status(500).json({ error: 'Failed to send Sabre command' });
+    console.error('Error processing request:', error);
+    res.status(500).send('Internal Server Error');
   }
 });
 
