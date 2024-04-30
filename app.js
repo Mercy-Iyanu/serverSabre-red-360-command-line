@@ -11,7 +11,6 @@ app.use(bodyParser.json());
 
 let cachedToken = null;
 
-// Route handler for retrieving the security token
 app.get('/api/sabre/token', async (req, res) => {
   if (cachedToken) {
     res.status(200).json({ token: cachedToken });
@@ -73,8 +72,6 @@ app.get('/api/sabre/token', async (req, res) => {
       const securityNode = xmlDoc.getElementsByTagName('wsse:Security')[0];
       const binarySecurityTokenNode = securityNode.getElementsByTagName('wsse:BinarySecurityToken')[0];
 
-      // console.log(binarySecurityTokenNode);
-
       cachedToken = binarySecurityTokenNode.textContent;
 
       res.status(200).json({ token: cachedToken });
@@ -85,10 +82,14 @@ app.get('/api/sabre/token', async (req, res) => {
   }
 });
 
-// Route handler for handling main functionality
+// Endpoint to handle ping requests
+app.post('/api/sabre/ping', (req, res) => {
+  // Respond with success message
+  res.status(200).send('Session kept alive.');
+});
+
 app.post('/api/sabre', async (req, res) => {
   try {
-    // Retrieve the security token
     const tokenResponse = await axios.get('http://localhost:3000/api/sabre/token');
     const binarySecurityToken = tokenResponse.data.token;
 
@@ -148,3 +149,13 @@ app.post('/api/sabre', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
+
+// Start a timer to send a ping request every 14 minutes
+setInterval(async () => {
+  try {
+    await axios.post('http://localhost:3000/api/sabre/ping');
+    console.log('Session ping sent successfully.');
+  } catch (error) {
+    console.error('Error sending session ping:', error);
+  }
+}, 14 * 60 * 1000);
